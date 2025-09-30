@@ -5,33 +5,81 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
 import { UserPlus, LogIn, Users } from "lucide-react";
+import { signUp, signIn, type UserData } from "../services/apiService";
 
 interface AuthFormsProps {
   isSignUp: boolean;
-  onSubmit: () => void;
+  onSubmit: (userData?: any) => void;
 }
 
 export function AuthForms({ isSignUp: initialIsSignUp, onSubmit }: AuthFormsProps) {
   const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     firstName: "",
     lastName: "",
-    nursingNumber: "",
-    workplace: ""
+    middleName: "",        
+    designation: "",
+    profilePicture: "",    
   });
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Add validation logic here if needed (e.g., check passwords match for sign-up)
-    console.log("Form submitted:", formData);
-    onSubmit(); // Trigger navigation to main app
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Validation
+      if (isSignUp && formData.password !== formData.confirmPassword) {
+        throw new Error("Passwords don't match");
+      }
+
+      let response;
+      
+      if (isSignUp) {
+        const userData: UserData = {
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          middleName: formData.middleName || undefined,
+          designation: formData.designation,
+          profilePicture: formData.profilePicture || undefined
+        };
+        console.log('Submitting signup with:', userData);
+        response = await signUp(userData);
+        console.log('Signup response:', response);
+      } else {
+        console.log('Submitting signin with:', { email: formData.email });
+        response = await signIn(formData.email, formData.password);
+        console.log('Signin response:', response);
+      }
+
+      // Backend returns { message, user, token }
+      if (response?.user) {
+        console.log('Authentication successful, calling onSubmit with:', response.user);
+        onSubmit(response.user);
+      } else {
+        console.log('Authentication failed, response:', response);
+        throw new Error(response?.error || "Authentication failed");
+      }
+    } catch (error: any) {
+      console.error("Authentication error:", error);
+      const errorMessage = error.message || "Authentication failed. Please try again.";
+      console.log('Setting error message:', errorMessage);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleForm = () => {
@@ -42,9 +90,11 @@ export function AuthForms({ isSignUp: initialIsSignUp, onSubmit }: AuthFormsProp
       confirmPassword: "",
       firstName: "",
       lastName: "",
-      nursingNumber: "",
-      workplace: ""
+      middleName: "",
+      designation: "",
+      profilePicture: "",
     });
+    setError(null);
   };
 
   return (
@@ -109,44 +159,41 @@ export function AuthForms({ isSignUp: initialIsSignUp, onSubmit }: AuthFormsProp
                   </div>
                 </div>
 
+                {/*
                 <div className="space-y-2">
-                  <Label htmlFor="nursingNumber">Nursing registration number</Label>
+                  <Label htmlFor="middleName">Middle name (optional)</Label>
                   <Input
-                    id="nursingNumber"
-                    placeholder="e.g., 12A3456E"
-                    value={formData.nursingNumber}
-                    onChange={(e) => handleInputChange("nursingNumber", e.target.value)}
-                    required
+                    id="middleName"
+                    placeholder="Optional"
+                    value={formData.middleName}
+                    onChange={(e) => handleInputChange("middleName", e.target.value)}
                   />
-                  <p className="text-sm text-muted-foreground">
-                    Your professional registration number for verification
-                  </p>
                 </div>
+                */}
 
                 <div className="space-y-2">
-                  <Label htmlFor="workplace">Workplace/Institution</Label>
+                  <Label htmlFor="designation">Designation</Label>
                   <Input
-                    id="workplace"
-                    placeholder="e.g., City General Hospital"
-                    value={formData.workplace}
-                    onChange={(e) => handleInputChange("workplace", e.target.value)}
+                    id="designation"
+                    placeholder="e.g., Doctor, Nurse, Midwife"
+                    value={formData.designation}
+                    onChange={(e) => handleInputChange("designation", e.target.value)}
                     required
                   />
                 </div>
+
+                {/*
+                <div className="space-y-2">
+                  <Label htmlFor="profilePicture">Profile Picture URL (optional)</Label>
+                  <Input
+                    id="profilePicture"
+                    placeholder="https://example.com/image.jpg"
+                    value={formData.profilePicture}
+                    onChange={(e) => handleInputChange("profilePicture", e.target.value)}
+                  />
+                </div>
+                */}
               </>
-            )}
-
-            {!isSignUp && (
-              <div className="space-y-2">
-                <Label htmlFor="nursingNumber">Nursing registration number</Label>
-                <Input
-                  id="nursingNumber"
-                  placeholder="e.g., 12A3456E"
-                  value={formData.nursingNumber}
-                  onChange={(e) => handleInputChange("nursingNumber", e.target.value)}
-                  required
-                />
-              </div>
             )}
 
             <div className="space-y-2">
@@ -186,16 +233,32 @@ export function AuthForms({ isSignUp: initialIsSignUp, onSubmit }: AuthFormsProp
                 />
               </div>
             )}
+            
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
+                <p className="text-destructive text-sm">{error}</p>
+              </div>
+            )}
           </CardContent>
-                <br />
+
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full">
-              {isSignUp ? "Create account" : "Sign in"}
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  {isSignUp ? "Creating account..." : "Signing in..."}
+                </div>
+              ) : (
+                isSignUp ? "Create account" : "Sign in"
+              )}
             </Button>
 
-           <div className="relative w-full">
+            <div className="relative w-full">
               <Separator />
-            
             </div>
 
             <Button
